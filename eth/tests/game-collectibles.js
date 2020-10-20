@@ -1,11 +1,10 @@
 const chai = require('chai');
 const { expect } = chai;
 const { Keccak } = require('sha3');
-const crypto = require('crypto');
 const { MerkleTree, PartialMerkleTree } = require('merkle-trees/js');
 const txDecoder = require('ethereum-tx-decoder');
-const { abi: optimismABI } = require('../build/contracts/Optimistic_Roll_In.json');
-const { abi: gameABI } = require('../build/contracts/Game_Collectibles.json');
+const { abi: optimismABI } = require('../build/Optimistic_Roll_In.json');
+const { abi: gameABI } = require('../build/Game_Collectibles.json');
 
 const OptimisticRollIn = artifacts.require('Optimistic_Roll_In');
 const GameCollectibles = artifacts.require('Game_Collectibles');
@@ -150,7 +149,7 @@ const advanceTime = (time) => {
   });
 };
 
-contract.only('Game Collectibles', (accounts) => {
+contract('Game Collectibles', (accounts) => {
   describe('Basic Testing (must be performed in order)', async () => {
     let user = accounts[0];
     let gameContractInstance = null;
@@ -200,11 +199,11 @@ contract.only('Game Collectibles', (accounts) => {
 
       expect(accountState).to.equal(expectedAccountStateHex);
 
-      expect(logs[0].event).to.equal('Initialized');
+      expect(logs[0].event).to.equal('ORI_Initialized');
       expect(logs[0].args[0]).to.equal(user);
       expect(logs[0].args[1].toString()).to.equal('0x' + currentState.toString('hex'));
 
-      expect(receipt.gasUsed).to.equal(46492);
+      expect(receipt.gasUsed).to.equal(46678);
     });
 
     it.only('allows a user to perform a normal state transition (and remain outside of optimism).', async () => {
@@ -236,7 +235,7 @@ contract.only('Game Collectibles', (accounts) => {
       expect(receipt.rawLogs[0].topics[1]).to.equal('0x' + to32ByteBuffer(packCount).toString('hex'));
       expect(receipt.rawLogs[0].topics[2]).to.equal('0x' + to32ByteBuffer(block.timestamp).toString('hex'));
 
-      expect(receipt.gasUsed).to.equal(46428);
+      expect(receipt.gasUsed).to.equal(46499);
     });
 
     it.only('allows a user to perform a valid optimistic state transition (and enter optimism).', async () => {
@@ -279,11 +278,11 @@ contract.only('Game Collectibles', (accounts) => {
 
       expect(accountState).to.equal('0x' + expectedAccountState.toString('hex'));
 
-      expect(logs[0].event).to.equal('New_Optimistic_State');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_State');
       expect(logs[0].args[0]).to.equal(user);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
-      expect(receipt.gasUsed).to.equal(38839);
+      expect(receipt.gasUsed).to.equal(37284);
     });
 
     it('allows a user (suspect) to perform a valid optimistic state transition.', async () => {
@@ -328,7 +327,7 @@ contract.only('Game Collectibles', (accounts) => {
       const accountState = await contractInstance.account_states(suspect);
       const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
 
-      expect(logs[0].event).to.equal('New_Optimistic_State');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_State');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
@@ -390,7 +389,7 @@ contract.only('Game Collectibles', (accounts) => {
       const accountState = await contractInstance.account_states(suspect);
       const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
 
-      expect(logs[0].event).to.equal('New_Optimistic_States');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_States');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
@@ -457,7 +456,7 @@ contract.only('Game Collectibles', (accounts) => {
       const accountState = await contractInstance.account_states(suspect);
       const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
 
-      expect(logs[0].event).to.equal('New_Optimistic_States');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_States');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
@@ -577,7 +576,7 @@ contract.only('Game Collectibles', (accounts) => {
       const accountState = await contractInstance.account_states(suspect);
       const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
 
-      expect(logs[0].event).to.equal('New_Optimistic_State');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_State');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
@@ -698,7 +697,7 @@ contract.only('Game Collectibles', (accounts) => {
 
       const expectedAccuserBalance = web3.utils.toBN(bondAmount).add(web3.utils.toBN(accuserBondAmount)).toString();
 
-      expect(logs[0].event).to.equal('Fraud_Proven');
+      expect(logs[0].event).to.equal('ORI_Fraud_Proven');
       expect(logs[0].args[0]).to.equal(accuser);
       expect(logs[0].args[1]).to.equal(suspect);
       expect(logs[0].args[2].toString()).to.equal(fraudulentTransitionIndex.toString());
@@ -779,7 +778,7 @@ contract.only('Game Collectibles', (accounts) => {
       const suspectLocker = await contractInstance.lockers(suspect);
       const suspectRollbackSize = await contractInstance.rollback_sizes(suspect);
 
-      expect(logs[0].event).to.equal('Rolled_Back');
+      expect(logs[0].event).to.equal('ORI_Rolled_Back');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(callDataTree.elements.length.toString());
       expect(logs[0].args[2].toString()).to.equal(lastTime.toString());
@@ -846,7 +845,7 @@ contract.only('Game Collectibles', (accounts) => {
       const accountState = await contractInstance.account_states(suspect);
       const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
 
-      expect(logs[0].event).to.equal('New_Optimistic_States');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_States');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
@@ -885,7 +884,7 @@ contract.only('Game Collectibles', (accounts) => {
 
       expect(accountState).to.equal(expectedAccountStateHex);
 
-      expect(logs[0].event).to.equal('Exited_Optimism');
+      expect(logs[0].event).to.equal('ORI_Exited_Optimism');
       expect(logs[0].args[0]).to.equal(suspect);
 
       expect(receipt.gasUsed).to.equal(289468);
@@ -941,7 +940,7 @@ contract.only('Game Collectibles', (accounts) => {
       const accountState = await contractInstance.account_states(suspect);
       const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
 
-      expect(logs[0].event).to.equal('New_Optimistic_States');
+      expect(logs[0].event).to.equal('ORI_New_Optimistic_States');
       expect(logs[0].args[0]).to.equal(suspect);
       expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
 
