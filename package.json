@@ -19,13 +19,20 @@
   "scripts": {
     "test": "mocha 'js/tests' && truffle test",
     "test-eth": "truffle test",
+    "test-eth-matic": "truffle test --network matic",
+    "test-eth-ropsten": "truffle test --network ropsten",
+    "test-eth-rinkeby": "truffle test --network rinkeby",
     "test-js": "mocha 'js/tests'",
     "ganache": "ganache-cli",
     "lint-eth": "solhint 'eth/contracts/**/*.sol'",
     "prettier": "prettier --write 'eth/contracts/**/*.sol' 'eth/tests/**/*.js' 'js/src/**/*.js' 'js/tests/**/*.js'",
     "prettier-eth": "prettier --write 'eth/contracts/**/*.sol' 'eth/tests/**/*.js'",
     "prettier-js": "prettier --write 'js/src/**/*.js' 'js/tests/**/*.js'",
-    "compile-eth": "yarn truffle compile"
+    "compile-eth": "truffle compile",
+    "migrate": "truffle migrate --network development",
+    "migrate-matic": "truffle migrate --network matic",
+    "migrate-ropsten": "truffle migrate --network ropsten",
+    "migrate-rinkeby": "truffle migrate --network rinkeby"
   },
   "author": "Circle-Free",
   "license": "MIT",
@@ -35,11 +42,12 @@
   "homepage": "https://github.com/circle-free/wavy#readme",
   "dependencies": {
     "merkle-trees": "^0.1.18",
-    "optimistic-roll-in": "^0.0.2",
+    "optimistic-roll-in": "^0.0.5",
     "sha3": "^2.1.3",
     "verifiable-delay-functions": "^0.0.3"
   },
   "devDependencies": {
+    "@truffle/hdwallet-provider": "^1.1.1",
     "chai": "^4.2.0",
     "ganache-cli": "^6.12.0",
     "mocha": "^8.2.0",
