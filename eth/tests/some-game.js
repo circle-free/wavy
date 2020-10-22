@@ -1,16 +1,21 @@
 const chai = require('chai');
 const { expect } = chai;
+var chaiAsPromised = require("chai-as-promised");
+chai.use(chaiAsPromised)
 
 const OptimisticRollIn = require('optimistic-roll-in');
 
 const truffleContract = require('@truffle/contract');
 const data = require('optimistic-roll-in/eth/build/Optimistic_Roll_In.json');
+
 const OptimisticRollInArtifact = truffleContract(data);
 OptimisticRollInArtifact.setProvider(web3.currentProvider);
 
 const SomeGameArtifact = artifacts.require('Some_Game');
-
 const SomeGame = require('../../js/src/index');
+
+const GameCollectibleToken = artifacts.require('Game_Collectible_Token');
+
 
 const { to32ByteBuffer, hashPacked, toHex, toBuffer } = require('../../js/src/utils');
 
@@ -59,8 +64,13 @@ contract('Some Game', (accounts) => {
     let watchTowerOptimist = null;
     let watchTowerBondAmount = null;
 
+    let user2 = accounts[2];
+
     before(async () => {
-      gameContractInstance = await SomeGameArtifact.new();
+      tokenContractInstance = await GameCollectibleToken.new();
+      tokenContractAddress = tokenContractInstance.address;
+
+      gameContractInstance = await SomeGameArtifact.new(tokenContractAddress);
       gameAddress = gameContractInstance.address;
 
       const initialStateSelector = gameContractInstance.abi.find(({ name }) => name === 'get_initial_state').signature;
@@ -71,7 +81,9 @@ contract('Some Game', (accounts) => {
       optimismAddress = optimismContractInstance.address;
 
       const options = { optimisticTreeOptions: { elementPrefix: '00' }, web3 };
-      userGame = new SomeGame(user, gameContractInstance, optimismContractInstance, options);
+      userGame = new SomeGame(user, gameContractInstance, optimismContractInstance, tokenContractInstance, options);
+
+      userGame2 = new SomeGame(user2, gameContractInstance, optimismContractInstance, tokenContractInstance, options);
     });
 
     it('[ 1] allows a user to initialize and bond.', async () => {
@@ -141,5 +153,112 @@ contract('Some Game', (accounts) => {
         console.log(`Not Critical, but we expected gas used for [ 1] to be 37652, but got ${receipt.gasUsed}`);
       }
     });
+
+    it('user can export a card to a token', async () => {
+      await advanceTime(userGame._ori.lastTime + 700);
+
+      const cardIndex = 0
+      const { tx } = await userGame.exportCardToToken(cardIndex);
+      const { receipt, logs } = tx;
+
+      const accountState = await userGame.getOptimismAccountState();
+
+      expect(accountState).to.equal(toHex(userGame._ori.accountState));
+      
+      const tokenBalance = await tokenContractInstance.balanceOf.call(user);
+      expect(tokenBalance.toNumber()).to.equal(1)
+      const tokenOwner = await tokenContractInstance.ownerOf.call(userGame.getTokenIds()[0])
+      expect(tokenOwner).to.equal(user)
+
+      // TODO: this is incorrect but for some reason Some Game events aren't being decoded
+      //       "Warning: Could not decode event!" They are still in receipt.rawLogs though
+      expect(logs[0].event).to.equal('ORI_New_State');
+      expect(logs[0].args[0]).to.equal(user);
+      expect(logs[0].args[1].toString()).to.equal(toHex(userGame.currentStateRoot));
+
+      if (receipt.gasUsed !== 48807) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 48807, but got ${receipt.gasUsed}`);
+      }
+    })
+
+
+    it('user can import a card from a token', async () => {
+      await advanceTime(userGame._ori.lastTime + 700);
+
+      const tokenId = userGame.getTokenIds()[0];
+
+      const { tx } = await userGame.importCardFromToken(tokenId);
+      const { receipt, logs } = tx;
+
+      const accountState = await userGame.getOptimismAccountState();
+
+      expect(accountState).to.equal(toHex(userGame._ori.accountState));
+      
+      const tokenBalance = await tokenContractInstance.balanceOf.call(user);
+      expect(tokenBalance.toNumber()).to.equal(0)
+      expect(tokenContractInstance.ownerOf.call(tokenId)).to.be.rejectedWith(Error, 'owner query for nonexistent token')
+
+      // TODO: this is incorrect but for some reason Some Game events aren't being decoded
+      //       "Warning: Could not decode event!" They are still in receipt.rawLogs though
+      expect(logs[0].event).to.equal('ORI_New_State');
+      expect(logs[0].args[0]).to.equal(user);
+      expect(logs[0].args[1].toString()).to.equal(toHex(userGame.currentStateRoot));
+
+      if (receipt.gasUsed !== 48807) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 48807, but got ${receipt.gasUsed}`);
+      }
+    })
+
+    it('user can transfer a card to another user', async () => {
+      await advanceTime(userGame._ori.lastTime + 700);
+
+      // initialize game for user 2
+      userBondAmount = '1000000000000000000';
+      await userGame2.initialize({ bond: userBondAmount });
+
+      const cardIndex = 1;
+      await userGame.exportCardToToken(cardIndex);
+
+      const tokenId = userGame.getTokenIds()[0];
+
+      const result = await userGame.transferToken(user2, tokenId);
+      const receivedToken = await userGame2.findToken(result.tx);
+
+      expect(receivedToken).to.equal(tokenId);
+      expect(userGame.getTokenIds().length).to.equal(0);
+      expect(userGame2.getTokenIds().length).to.equal(1);
+
+      const userTokenBalance = await tokenContractInstance.balanceOf.call(user);
+      expect(userTokenBalance.toNumber()).to.equal(0);
+      const user2TokenBalance = await tokenContractInstance.balanceOf.call(user2);
+      expect(user2TokenBalance.toNumber()).to.equal(1);
+      const tokenOwner = await tokenContractInstance.ownerOf.call(tokenId);
+      expect(tokenOwner).to.equal(user2);
+    })
+
+    it('other user can import received card', async () => {
+      await advanceTime(userGame2._ori.lastTime + 700);
+
+      const tokenId = userGame2.getTokenIds()[0];
+
+      const { tx } = await userGame2.importCardFromToken(tokenId);
+      const { receipt, logs } = tx;
+
+      expect(userGame2.getTokenIds().length).to.equal(0);
+
+      const accountState = await userGame2.getOptimismAccountState();
+
+      expect(accountState).to.equal(toHex(userGame2._ori.accountState));
+      
+      const tokenBalance = await tokenContractInstance.balanceOf.call(user2);
+      expect(tokenBalance.toNumber()).to.equal(0);
+      expect(tokenContractInstance.ownerOf.call(tokenId)).to.be.rejectedWith(Error, 'owner query for nonexistent token');
+
+      // TODO: this is incorrect but for some reason Some Game events aren't being decoded
+      //       "Warning: Could not decode event!" They are still in receipt.rawLogs though
+      expect(logs[0].event).to.equal('ORI_New_State');
+      expect(logs[0].args[0]).to.equal(user2);
+      expect(logs[0].args[1].toString()).to.equal(toHex(userGame2.currentStateRoot));
+    })
   });
 });
