@@ -17,7 +17,7 @@ contract Some_Game {
     _;
   }
 
-  function get_initial_state(address user) external payable returns (bytes32) {
+  function initialize_state(address user) external payable returns (bytes32) {
     return keccak256(abi.encodePacked(bytes32(0), bytes32(0)));
   }
 

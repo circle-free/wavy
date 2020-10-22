@@ -1,45 +1,14 @@
 const chai = require('chai');
 const { expect } = chai;
 
-const OptimisticRollIn = require('optimistic-roll-in');
-
-const truffleContract = require('@truffle/contract');
-const data = require('optimistic-roll-in/eth/build/Optimistic_Roll_In.json');
-const OptimisticRollInArtifact = truffleContract(data);
-OptimisticRollInArtifact.setProvider(web3.currentProvider);
-
 const SomeGameArtifact = artifacts.require('Some_Game');
+const SomeRollIn = artifacts.require('Some_Roll_In');
 
 const SomeGame = require('../../js/src/index');
 
 const { to32ByteBuffer, hashPacked, toHex, toBuffer } = require('../../js/src/utils');
 
-const zeroAddress = '0x0000000000000000000000000000000000000000';
-const costPerPack = 1000000000000;
-const cardsPerPack = 10;
 const packsPurchasedEvent = '0x9146894c2ac6edd4e5aab8e0504cd0955e0937f8e8add1ab48c8c47d6c7d50c4';
-
-const getStateFromTrees = (packsTree, cardsTree) => {
-  return hashPacked([packsTree.root, cardsTree.root]);
-};
-
-const advanceTime = (time) => {
-  return new Promise((resolve, reject) => {
-    web3.currentProvider.send(
-      {
-        jsonrpc: '2.0',
-        method: 'evm_increaseTime',
-        params: [time],
-        id: new Date().getTime(),
-      },
-      (err, result) => {
-        if (err) return reject(err);
-
-        return resolve(result);
-      }
-    );
-  });
-};
 
 contract('Some Game', (accounts) => {
   describe('Basic Testing (must be performed in order)', () => {
@@ -60,14 +29,10 @@ contract('Some Game', (accounts) => {
     let watchTowerBondAmount = null;
 
     before(async () => {
-      gameContractInstance = await SomeGameArtifact.new();
+      gameContractInstance = await SomeGameArtifact.deployed();
       gameAddress = gameContractInstance.address;
 
-      const initialStateSelector = gameContractInstance.abi.find(({ name }) => name === 'get_initial_state').signature;
-
-      optimismContractInstance = await OptimisticRollInArtifact.new(gameAddress, initialStateSelector, {
-        from: accounts[0],
-      });
+      optimismContractInstance = await SomeRollIn.deployed();
       optimismAddress = optimismContractInstance.address;
 
       const options = { optimisticTreeOptions: { elementPrefix: '00' }, web3 };
@@ -92,12 +57,12 @@ contract('Some Game', (accounts) => {
       expect(bondBalance.toString()).to.equal(userBondAmount);
       expect(optimismBalance.toString()).to.equal(userBondAmount);
 
-      if (receipt.gasUsed !== 67296) {
-        console.log(`Not Critical, but we expected gas used for [ 1] to be 42739, but got ${receipt.gasUsed}`);
+      if (receipt.gasUsed !== 67318) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 67318, but got ${receipt.gasUsed}`);
       }
     });
 
-    it('allows a user to buy 5 packs of cards (normal state transition and remain outside of optimism).', async () => {
+    it('[ 2] allows a user to buy 5 packs of cards (normal state transition and remain outside of optimism).', async () => {
       const packCount = 5;
       const { tx } = await userGame.buyPack(packCount);
       const { receipt, logs } = tx;
@@ -119,12 +84,12 @@ contract('Some Game', (accounts) => {
       expect(optimismBalance.toString()).to.equal(userBondAmount);
       expect(gameBalance.toString()).to.equal(userGame.getPurchaseCost(packCount));
 
-      if (receipt.gasUsed !== 48807) {
-        console.log(`Not Critical, but we expected gas used for [ 1] to be 48807, but got ${receipt.gasUsed}`);
+      if (receipt.gasUsed !== 48829) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 48829, but got ${receipt.gasUsed}`);
       }
     });
 
-    it('allows a user to perform a valid optimistic state transition (and enter optimism).', async () => {
+    it('[ 3] allows a user to perform a valid optimistic state transition (and enter optimism).', async () => {
       const packIndex = 0;
       const { tx } = await userGame.openPack(packIndex);
       const { receipt, logs } = tx;
@@ -137,8 +102,8 @@ contract('Some Game', (accounts) => {
       expect(logs[0].args[0]).to.equal(user);
       expect(logs[0].args[1].toString()).to.equal(userGame._ori.lastTime.toString());
 
-      if (receipt.gasUsed !== 37652) {
-        console.log(`Not Critical, but we expected gas used for [ 1] to be 37652, but got ${receipt.gasUsed}`);
+      if (receipt.gasUsed !== 37674) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 37674, but got ${receipt.gasUsed}`);
       }
     });
   });

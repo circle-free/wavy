@@ -2,12 +2,15 @@
   "cSpell.words": [
     "Hackathon",
     "Keccak",
+    "Ropsten's",
     "SPDX",
     "blockhash",
     "camelcase",
+    "hdwallet",
     "merkle",
     "multiline",
     "sighash",
-    "solhint"
+    "solhint",
+    "websockets"
   ]
 }

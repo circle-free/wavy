@@ -1,3 +1,6 @@
 node_modules
 build
 .DS_Store
+.infura
+.mnemonic
+.vigil
