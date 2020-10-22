@@ -17,7 +17,7 @@ const getInitialState = (_user) => {
   const packsTree = new MerkleTree([], treeOptions);
   const cardsTree = new MerkleTree([], treeOptions);
 
-  return { packsTree, cardsTree };
+  return { packsTree, cardsTree, tokenIds: [] };
 };
 
 // Impure, so takes impurities
@@ -32,7 +32,7 @@ const buyPacks = (_user, _currentState, impurities = {}) => {
   const packCount = value / COST_PER_PACK;
   assert(packCount > 0n, 'Incorrect payment.');
 
-  const { packsTree, cardsTree } = _currentState;
+  const { packsTree, cardsTree, tokenIds } = _currentState;
 
   const newPacks = Array(Number(packCount))
     .fill(null)
@@ -41,13 +41,13 @@ const buyPacks = (_user, _currentState, impurities = {}) => {
   const newPacksArray = packsTree.elements.concat(newPacks);
   const newPacksTree = new MerkleTree(newPacksArray, treeOptions);
 
-  return { packsTree: newPacksTree, cardsTree };
+  return { packsTree: newPacksTree, cardsTree, tokenIds };
 };
 
 const openPack = (_user, _currentState, _packIndex) => {
   const user = toBuffer(_user);
 
-  const { packsTree, cardsTree } = _currentState;
+  const { packsTree, cardsTree, tokenIds } = _currentState;
 
   const packs = packsTree.elements;
 
@@ -63,11 +63,37 @@ const openPack = (_user, _currentState, _packIndex) => {
   const cards = cardsTree.elements.concat(newCards);
   const newCardsTree = new MerkleTree(cards, treeOptions);
 
-  return { packsTree: newPacksTree, cardsTree: newCardsTree };
+  return { packsTree: newPacksTree, cardsTree: newCardsTree, tokenIds };
+};
+
+const exportCardToToken = (_user, currentState, cardIndex, impurities = {}) => {
+  const { packsTree, cardsTree, tokenIds } = currentState;
+  const { tokenId } = impurities;
+
+  const cards = cardsTree.elements;
+
+  assert(!cards[cardIndex].equals(to32ByteBuffer(0)), 'CARD_ALREADY_EXPORTED');
+
+  cards[cardIndex] = to32ByteBuffer(0);
+  const newCardsTree = new MerkleTree(cards, treeOptions);
+
+  return { packsTree, cardsTree: newCardsTree, tokenIds: tokenIds.concat(tokenId) };
+};
+
+const importCardFromToken = (_user, currentState, tokenId, impurities = {}) => {
+  const { packsTree, cardsTree, tokenIds } = currentState;
+  const { card } = impurities;
+
+  const cards = cardsTree.elements.concat(toBuffer(card));
+  const newCardsTree = new MerkleTree(cards, treeOptions);
+
+  return { packsTree: packsTree, cardsTree: newCardsTree, tokenIds: tokenIds.filter((id) => id !== tokenId) };
 };
 
 module.exports = {
   getInitialState,
   buyPacks,
   openPack,
+  exportCardToToken,
+  importCardFromToken,
 };
