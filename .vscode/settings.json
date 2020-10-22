@@ -3,8 +3,10 @@
     "Hackathon",
     "Keccak",
     "SPDX",
+    "blockhash",
     "camelcase",
     "merkle",
+    "multiline",
     "sighash",
     "solhint"
   ]
