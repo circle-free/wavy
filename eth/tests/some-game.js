@@ -74,7 +74,7 @@ contract('Some Game', (accounts) => {
       userGame = new SomeGame(user, gameContractInstance, optimismContractInstance, options);
     });
 
-    it.only('[ 1] allows a user to initialize and bond.', async () => {
+    it('[ 1] allows a user to initialize and bond.', async () => {
       userBondAmount = '1000000000000000000';
       const { tx } = await userGame.initialize({ bond: userBondAmount });
       const { receipt, logs } = tx;
@@ -97,7 +97,7 @@ contract('Some Game', (accounts) => {
       }
     });
 
-    it.only('allows a user to buy 5 packs of cards (normal state transition and remain outside of optimism).', async () => {
+    it('allows a user to buy 5 packs of cards (normal state transition and remain outside of optimism).', async () => {
       const packCount = 5;
       const { tx } = await userGame.buyPack(packCount);
       const { receipt, logs } = tx;
@@ -109,6 +109,8 @@ contract('Some Game', (accounts) => {
 
       expect(accountState).to.equal(toHex(userGame._ori.accountState));
 
+      // TODO: this is incorrect but for some reason Some Game events aren't being decoded
+      //       "Warning: Could not decode event!" They are still in receipt.rawLogs though
       expect(logs[0].event).to.equal('ORI_New_State');
       expect(logs[0].args[0]).to.equal(user);
       expect(logs[0].args[1].toString()).to.equal(toHex(userGame.currentStateRoot));
@@ -117,57 +119,26 @@ contract('Some Game', (accounts) => {
       expect(optimismBalance.toString()).to.equal(userBondAmount);
       expect(gameBalance.toString()).to.equal(userGame.getPurchaseCost(packCount));
 
-      if (receipt.gasUsed !== 67296) {
-        console.log(`Not Critical, but we expected gas used for [ 1] to be 42739, but got ${receipt.gasUsed}`);
+      if (receipt.gasUsed !== 48807) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 48807, but got ${receipt.gasUsed}`);
       }
     });
 
     it('allows a user to perform a valid optimistic state transition (and enter optimism).', async () => {
-      const proofOptions = { compact: true };
       const packIndex = 0;
+      const { tx } = await userGame.openPack(packIndex);
+      const { receipt, logs } = tx;
 
-      const { callDataHex, newValues } = await openPackTransition(
-        packsTree,
-        cardsTree,
-        packIndex,
-        gameContractInstance,
-        user
-      );
-      const transition = newValues();
-      const newStateHex = '0x' + transition.newState.toString('hex');
+      const accountState = await userGame.getOptimismAccountState();
 
-      // Get the expect new call data tree and append proof
-      const callData = Buffer.from(callDataHex.slice(2), 'hex');
-      const { proof, newMerkleTree } = callDataTree.appendSingle(callData, proofOptions);
-      const { compactProof: appendProof } = proof;
-      const proofHex = appendProof.map((p) => '0x' + p.toString('hex'));
-
-      const { receipt, logs } = await optimismContractInstance.perform_optimistically_and_enter(
-        callDataHex,
-        newStateHex,
-        proofHex,
-        { from: user }
-      );
-
-      // Since the transaction executed successfully, update the locally maintained variables
-      const block = await web3.eth.getBlock(receipt.blockNumber);
-      lastTime = block.timestamp;
-      packsTree = transition.packsTree;
-      cardsTree = transition.cardsTree;
-      currentState = transition.newState;
-      callDataTree = newMerkleTree;
-
-      const accountState = await optimismContractInstance.account_states(user);
-      const expectedAccountState = hashPacked([callDataTree.root, currentState, to32ByteBuffer(lastTime)]);
-
-      expect(accountState).to.equal('0x' + expectedAccountState.toString('hex'));
+      expect(accountState).to.equal(toHex(userGame._ori.accountState));
 
       expect(logs[0].event).to.equal('ORI_New_Optimistic_State');
       expect(logs[0].args[0]).to.equal(user);
-      expect(logs[0].args[1].toString()).to.equal(lastTime.toString());
+      expect(logs[0].args[1].toString()).to.equal(userGame._ori.lastTime.toString());
 
-      if (receipt.gasUsed !== 42739) {
-        console.log(`Not Critical, but we expected gas used for [ 3] to be 42739, but got ${receipt.gasUsed}`);
+      if (receipt.gasUsed !== 37652) {
+        console.log(`Not Critical, but we expected gas used for [ 1] to be 37652, but got ${receipt.gasUsed}`);
       }
     });
   });

@@ -6,6 +6,8 @@ pragma experimental ABIEncoderV2;
 import "merkle-trees/eth/contracts/libraries/memory/bytes32/standard/merkle-library.sol";
 
 contract Some_Game {
+  event SG_New_Packs(uint256 indexed pack_count, bytes32 indexed block_hash);
+
   modifier valid_roots(
     bytes32 current_state,
     bytes32 packs_root,
@@ -33,12 +35,12 @@ contract Some_Game {
     require(pack_count > 0, "INCORRECT_PAYMENT");
 
     // use new_state as last block has for now
-    new_state = blockhash(block.number - 1);
+    bytes32 block_hash = blockhash(block.number - 1);
 
     // Build random pack data
     bytes32[] memory packs = new bytes32[](pack_count);
     for (uint256 i; i < pack_count; ++i) {
-      packs[i] = keccak256(abi.encodePacked(user, i, new_state));
+      packs[i] = keccak256(abi.encodePacked(user, i, block_hash));
     }
 
     // Append packs to user's packs root
@@ -46,6 +48,8 @@ contract Some_Game {
 
     // returns new user state
     new_state = keccak256(abi.encodePacked(packs_root, cards_root));
+
+    emit SG_New_Packs(pack_count, block_hash);
   }
 
   // Pure and therefore possible as an optimistic transition

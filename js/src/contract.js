@@ -34,48 +34,36 @@ const buyPacks = (_user, _currentState, impurities = {}) => {
 
   const { packsTree, cardsTree } = _currentState;
 
-  const packs = Array(packCount)
+  const newPacks = Array(Number(packCount))
     .fill(null)
     .map((_, i) => hashPacked([user, to32ByteBuffer(i), blockhash]));
 
-  const newPacksArray = packsTree.elements.concat(packs);
+  const newPacksArray = packsTree.elements.concat(newPacks);
   const newPacksTree = new MerkleTree(newPacksArray, treeOptions);
 
   return { packsTree: newPacksTree, cardsTree };
 };
 
-const openPack = (_user, _currentState, _packIndex, _pack, _packsRoot, _packProof, _cardsRoot, _cardsAppendProof) => {
+const openPack = (_user, _currentState, _packIndex) => {
   const user = toBuffer(_user);
-  const currentState = toBuffer(_currentState);
-  const packIndex = toBuffer(_packIndex);
-  const pack = toBuffer(_pack);
-  const packsRoot = toBuffer(_packsRoot);
-  const packProof = toBuffer(_packProof);
-  const cardsRoot = toBuffer(_cardsRoot);
-  const cardsAppendProof = toBuffer(_cardsAppendProof);
 
-  assert(hashPacked([packsRoot, cardsRoot]) == currentState, 'Invalid user roots.');
-  assert(!pack.equals(to32ByteBuffer(0)), 'ALREADY_OPENED');
+  const { packsTree, cardsTree } = _currentState;
 
-  const cards = Array(CARDS_PER_PACK)
+  const packs = packsTree.elements;
+
+  assert(!packs[_packIndex].equals(to32ByteBuffer(0)), 'ALREADY_OPENED');
+
+  const newCards = Array(Number(CARDS_PER_PACK))
     .fill(null)
-    .map((_, i) => hashPacked([user, pack, to32ByteBuffer(i)]));
+    .map((_, i) => hashPacked([user, packs[_packIndex], to32ByteBuffer(i)]));
 
-  const params1 = {
-    root: packsRoot,
-    index: packIndex,
-    element: pack,
-    updateElement: to32ByteBuffer(0),
-    compactProof: packProof,
-  };
-  const { root: newPacksRoot } = MerkleTree.updateWithSingleProof(params1, treeOptions);
+  packs[_packIndex] = to32ByteBuffer(0);
+  const newPacksTree = new MerkleTree(packs, treeOptions);
 
-  const params2 = { root: cardsRoot, appendElements: cards, compactProof: cardsAppendProof };
-  const { root: newCardsRoot } = MerkleTree.appendWithAppendProof(params2, treeOptions);
+  const cards = cardsTree.elements.concat(newCards);
+  const newCardsTree = new MerkleTree(cards, treeOptions);
 
-  const newState = hashPacked([newPacksRoot, newCardsRoot]);
-
-  return { newState, cards };
+  return { packsTree: newPacksTree, cardsTree: newCardsTree };
 };
 
 module.exports = {

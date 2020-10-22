@@ -8,15 +8,13 @@ const COST_PER_PACK = BigInt('10') ** BigInt('12');
 
 const proofOptions = { compact: true, simple: true };
 
+const SG_New_Packs = '0xed7df3e335caa0b725b5ed38dfa67c4f0da28a4c983e29b247bb36454ace0758';
+
 class SomeGame {
   constructor(user, gameContractInstance, oriContractInstance, options = {}) {
     const { optimisticTreeOptions, web3 } = options;
 
     assert(web3, 'web3 option is mandatory for now.');
-
-    const pureFunctions = {
-      open_pack: (...args) => contractFunctions.openPack(args).newState,
-    };
 
     const oriOptions = {
       sourceAddress: user,
@@ -24,7 +22,7 @@ class SomeGame {
       web3,
     };
 
-    this._ori = new OptimisticRollIn(oriContractInstance, gameContractInstance, pureFunctions, user, oriOptions);
+    this._ori = new OptimisticRollIn(oriContractInstance, gameContractInstance, user, oriOptions);
 
     this._user = user;
 
@@ -72,13 +70,33 @@ class SomeGame {
     const callOptions = { value: cost };
     const result = await this._ori.buy_packs.normal(callArgs, callOptions);
 
-    const impurities = { value: cost, blockHash: result.receipt.blockHash };
+    const gameLog = result.receipt.rawLogs.find(({ topics }) => topics[0] === SG_New_Packs);
+
+    const impurities = { value: cost, blockHash: gameLog.topics[2] };
     const newState = contractFunctions.buyPacks(this._user, this._state, impurities);
 
-    console.log(toHex(SomeGame.getStateRoot(newState)));
-    console.log(result.logs[0].args[1]);
+    assert(SomeGame.getStateRoot(newState).equals(result.newState), 'New state mismatch');
 
-    assert(toHex(SomeGame.getStateRoot(newState)) === result.logs[0].args[1], 'New state mismatch');
+    this._state = newState;
+
+    return { tx: result };
+  }
+
+  async openPack(packIndex) {
+    const newState = contractFunctions.openPack(this._user, this._state, packIndex);
+    const newStateRoot = SomeGame.getStateRoot(newState);
+
+    const { root: packsRoot, element: pack, compactProof: packProof } = this._state.packsTree.generateSingleProof(
+      packIndex,
+      proofOptions
+    );
+
+    const { root: cardsRoot, compactProof: cardsAppendProof } = this._state.cardsTree.generateAppendProof(proofOptions);
+
+    const callArgs = [packIndex, pack, packsRoot, packProof, cardsRoot, cardsAppendProof];
+    const result = await this._ori.open_pack.optimistic(callArgs, newStateRoot);
+
+    assert(newStateRoot.equals(result.newState), 'New state mismatch');
 
     this._state = newState;
 
