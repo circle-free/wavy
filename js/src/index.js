@@ -14,8 +14,7 @@ const SG_Import_Token = '0x4be831fa28d5bc71f4a1ca7a8af7903d241ce9e68bfd2e781558b
 const Token_Transfer = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 class SomeGame {
-  constructor(user, gameContractInstance, oriContractInstance, tokenContractInstance, options = {}) {
-
+  constructor(user, gameContractInstance, tokenContractInstance, oriContractInstance, options = {}) {
     const { optimisticTreeOptions, web3 } = options;
     assert(web3, 'web3 option is mandatory for now.');
     const oriOptions = {
@@ -31,13 +30,13 @@ class SomeGame {
     this._state = {
       packsTree: null,
       cardsTree: null,
-      tokenIds: null
+      tokenIds: null,
     };
 
-    this._contract = gameContractInstance;
+    this._gameContract = gameContractInstance;
 
     this._tokenContract = tokenContractInstance;
-    
+
     this._web3 = web3;
   }
 
@@ -51,11 +50,17 @@ class SomeGame {
     return SomeGame.getStateRoot(this._state);
   }
 
+  // GETTER: Returns list of exported token ids owned by the user
+  get tokenIds() {
+    return this._state.tokenIds;
+  }
+
+  // PUBLIC: Returns computed purchase cost for a certain number of packs
   getPurchaseCost(packCount) {
     return (BigInt(packCount) * COST_PER_PACK).toString();
   }
 
-  // PUBLIC: initializes the user's game state
+  // PUBLIC: Initializes the user's game state
   async initialize(bondAmount) {
     // TODO: prevent initializing already initialized account
 
@@ -69,7 +74,8 @@ class SomeGame {
     return { tx: result };
   }
 
-  async buyPack(packCount) {
+  // PUBLIC: Buy packs of cards
+  async buyPacks(packCount) {
     const cost = this.getPurchaseCost(packCount);
     const { root: packsRoot, compactProof } = this._state.packsTree.generateAppendProof(proofOptions);
 
@@ -89,6 +95,7 @@ class SomeGame {
     return { tx: result };
   }
 
+  // PUBLIC: Open a pack of cards
   async openPack(packIndex) {
     const newState = contractFunctions.openPack(this._user, this._state, packIndex);
     const newStateRoot = SomeGame.getStateRoot(newState);
@@ -110,41 +117,43 @@ class SomeGame {
     return { tx: result };
   }
 
+  // PUBLIC: Export card as an ERC721 NFT to be traded
   async exportCardToToken(cardIndex) {
-    const { root: cardsRoot, element: card, compactProof: cardProof } = this._state.cardsTree.generateSingleProof(
-      cardIndex,
-      proofOptions
-    );
-    
+    const proof = this._state.cardsTree.generateSingleProof(cardIndex, proofOptions);
+    const { root: cardsRoot, element: card, compactProof: cardProof } = proof;
+
     const callArgs = [this._state.packsTree.root, cardsRoot, cardIndex, card, cardProof];
-    const result = await this._ori.export_card_to_token.normal(callArgs, {});
+    const result = await this._ori.export_card_to_token.normal(callArgs);
 
     const gameLog = result.receipt.rawLogs.find(({ topics }) => topics[0] === SG_Export_Token);
 
     const impurities = { tokenId: gameLog.topics[1] };
     const newState = contractFunctions.exportCardToToken(this._user, this._state, cardIndex, impurities);
-    
+
     const newStateRoot = SomeGame.getStateRoot(newState);
     assert(newStateRoot.equals(result.newState), 'New state mismatch');
 
     this._state = newState;
 
+    // TODO: return token id and index in cards
+
     return { tx: result };
   }
 
+  // PUBLIC: Import a card from an ERC721 NFT to be used
   async importCardFromToken(tokenId) {
     const { root: cardsRoot, compactProof: cardsAppendProof } = this._state.cardsTree.generateAppendProof(proofOptions);
 
     const callArgs = [this._state.packsTree.root, cardsRoot, cardsAppendProof, tokenId];
-    const result = await this._ori.import_card_from_token.normal(callArgs, {});
+    const result = await this._ori.import_card_from_token.normal(callArgs);
 
     const gameLog = result.receipt.rawLogs.find(({ topics }) => topics[0] === SG_Import_Token);
 
-    const impurities = { card: gameLog.topics[1] }
+    const impurities = { card: gameLog.topics[1] };
     const newState = contractFunctions.importCardFromToken(this._user, this._state, tokenId, impurities);
-    
+
     const newStateRoot = SomeGame.getStateRoot(newState);
-    
+
     assert(newStateRoot.equals(result.newState), 'New state mismatch');
 
     this._state = newState;
@@ -152,28 +161,16 @@ class SomeGame {
     return { tx: result };
   }
 
-  // PUBLIC: Returns user's optimism account state (on chain)
-  getOptimismAccountState() {
-    return this._ori.getAccountState();
-  }
-
-  // PUBLIC: Returns user's optimism bond balance (on chain)
-  getOptimismBalance() {
-    return this._ori.getBalance();
-  }
-
-  getTokenIds() {
-    return this._state.tokenIds;
-  }
-
+  // PUBLIC: Transfer an NFT to another user
   async transferToken(to, tokenId) {
-    const result = await this._tokenContract.transferFrom(this._user, to, tokenId, {from: this._user});
+    const result = await this._tokenContract.transferFrom(this._user, to, tokenId, { from: this._user });
 
-    this._state.tokenIds = this._state.tokenIds.filter(id => id !== tokenId);
+    this._state.tokenIds = this._state.tokenIds.filter((id) => id !== tokenId);
 
     return result;
   }
 
+  // PUBLIC: Add an NFT to internal list from a matching transaction
   async findToken(txId) {
     const receipt = await this._web3.eth.getTransactionReceipt(txId);
     const gameLog = receipt.logs.find(({ topics }) => topics[0] === Token_Transfer);
@@ -190,7 +187,18 @@ class SomeGame {
     return null;
   }
 
+  // PUBLIC: Returns user's optimism account state (on chain)
+  getOptimismAccountState() {
+    return this._ori.getAccountState();
+  }
+
+  // PUBLIC: Returns user's optimism bond balance (on chain)
+  getOptimismBalance() {
+    return this._ori.getBalance();
+  }
+
   // TODO: implement isBonded()
+  // TODO: get token ids (on chain)
 }
 
 module.exports = SomeGame;

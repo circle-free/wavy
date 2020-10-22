@@ -68,7 +68,7 @@ const openPack = (_user, _currentState, _packIndex) => {
 
 const exportCardToToken = (_user, currentState, cardIndex, impurities = {}) => {
   const { packsTree, cardsTree, tokenIds } = currentState;
-  const { tokenId }  = impurities;
+  const { tokenId } = impurities;
 
   const cards = cardsTree.elements;
 
@@ -76,10 +76,9 @@ const exportCardToToken = (_user, currentState, cardIndex, impurities = {}) => {
 
   cards[cardIndex] = to32ByteBuffer(0);
   const newCardsTree = new MerkleTree(cards, treeOptions);
-  
 
   return { packsTree, cardsTree: newCardsTree, tokenIds: tokenIds.concat(tokenId) };
-}
+};
 
 const importCardFromToken = (_user, currentState, tokenId, impurities = {}) => {
   const { packsTree, cardsTree, tokenIds } = currentState;
@@ -88,14 +87,13 @@ const importCardFromToken = (_user, currentState, tokenId, impurities = {}) => {
   const cards = cardsTree.elements.concat(toBuffer(card));
   const newCardsTree = new MerkleTree(cards, treeOptions);
 
-  return { packsTree: packsTree, cardsTree: newCardsTree, tokenIds: tokenIds.filter(id => id !== tokenId) };
-}
-
+  return { packsTree: packsTree, cardsTree: newCardsTree, tokenIds: tokenIds.filter((id) => id !== tokenId) };
+};
 
 module.exports = {
   getInitialState,
   buyPacks,
   openPack,
   exportCardToToken,
-  importCardFromToken
+  importCardFromToken,
 };
