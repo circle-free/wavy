@@ -1,7 +1,7 @@
 const assert = require('assert');
 const { MerkleTree } = require('merkle-trees/js');
 
-const { to32ByteBuffer, hashPacked, toHex, toBuffer } = require('./utils');
+const { to32ByteBuffer, hashPacked, toHex, toBuffer, toBigInt } = require('./utils');
 
 const COST_PER_PACK = BigInt('10') ** BigInt('12');
 const CARDS_PER_PACK = BigInt('10');
@@ -44,18 +44,16 @@ const buyPacks = (_user, _currentState, impurities = {}) => {
   return { packsTree: newPacksTree, cardsTree, tokenIds };
 };
 
-const openPack = (_user, _currentState, _packIndex) => {
-  const user = toBuffer(_user);
-
+const openPack = (_user, _currentState, _packIndex, _beacons) => {
   const { packsTree, cardsTree, tokenIds } = _currentState;
-
+  const beacon = toBuffer(_beacons[_beacons.length - 1]);
   const packs = packsTree.elements;
 
   assert(!packs[_packIndex].equals(to32ByteBuffer(0)), 'ALREADY_OPENED');
 
   const newCards = Array(Number(CARDS_PER_PACK))
     .fill(null)
-    .map((_, i) => hashPacked([user, packs[_packIndex], to32ByteBuffer(i)]));
+    .map((_, i) => hashPacked([beacon, to32ByteBuffer(i)]));
 
   packs[_packIndex] = to32ByteBuffer(0);
   const newPacksTree = new MerkleTree(packs, treeOptions);

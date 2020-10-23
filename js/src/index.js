@@ -1,7 +1,8 @@
 const assert = require('assert');
 const OptimisticRollIn = require('optimistic-roll-in');
+const VerifiableDelayFunction = require('verifiable-delay-functions');
 
-const { to32ByteBuffer, hashPacked, toHex, toBuffer } = require('./utils');
+const { to32ByteBuffer, hashPacked, toHex, toBuffer, toBigInt } = require('./utils');
 const contractFunctions = require('./contract');
 
 const COST_PER_PACK = BigInt('10') ** BigInt('12');
@@ -15,8 +16,23 @@ const Token_Transfer = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a
 
 class SomeGame {
   constructor(user, gameContractInstance, tokenContractInstance, oriContractInstance, options = {}) {
-    const { optimisticTreeOptions, web3 } = options;
+    const { optimisticTreeOptions, web3, vdfOptions = {} } = options;
+
     assert(web3, 'web3 option is mandatory for now.');
+
+    this._web3 = web3;
+
+    assert(vdfOptions.prime, 'VDF prime number is mandatory.');
+    assert(vdfOptions.iterations, 'VDF iterations is mandatory.');
+    assert(vdfOptions.intermediates, 'VDF iterations is mandatory.');
+
+    this._vdfOptions = {
+      type: 'sloth',
+      prime: toBigInt(vdfOptions.prime),
+      iterations: toBigInt(vdfOptions.iterations),
+      intermediates: toBigInt(vdfOptions.intermediates),
+    };
+
     const oriOptions = {
       sourceAddress: user,
       treeOptions: optimisticTreeOptions,
@@ -33,11 +49,11 @@ class SomeGame {
       tokenIds: null,
     };
 
+    this._exposedPacks = {};
+
     this._gameContract = gameContractInstance;
 
     this._tokenContract = tokenContractInstance;
-
-    this._web3 = web3;
   }
 
   // STATIC: Returns player state from packs and cards trees
@@ -53,6 +69,11 @@ class SomeGame {
   // GETTER: Returns list of exported token ids owned by the user
   get tokenIds() {
     return this._state.tokenIds;
+  }
+
+  // GETTER: Returns pack that was peeked into
+  get peekedPacks() {
+    return this._exposedPacks;
   }
 
   // PUBLIC: Returns computed purchase cost for a certain number of packs
@@ -95,10 +116,36 @@ class SomeGame {
     return { tx: result };
   }
 
+  // PUBLIC: Get pack contents and vVDF beacon values needed to open it
+  // NOTE: This may take long, and can be made async
+  peekPack(packIndex) {
+    const pack = this._state.packsTree.elements[packIndex];
+    const seed = toBigInt(pack);
+    const iterations = this._vdfOptions.iterations;
+    const intermediates = this._vdfOptions.intermediates;
+    const vdfOptions = { type: this._vdfOptions.type, prime: this._vdfOptions.prime };
+    const beacons = VerifiableDelayFunction.proveDelayWithIntermediates(seed, iterations, intermediates, vdfOptions);
+
+    const currentCardCount = this._state.cardsTree.elements.length;
+    const newState = contractFunctions.openPack(this._user, this._state, packIndex);
+    const { cardsTree } = newState;
+    const newCardCount = cardsTree.elements.length;
+
+    const cardsInPack = cardsTree.elements.slice(currentCardCount - newCardCount);
+
+    this._exposedPacks[packIndex] = {
+      beacons: [pack].concat(beacons),
+      cardsInPack,
+    };
+
+    return newState;
+  }
+
   // PUBLIC: Open a pack of cards
   async openPack(packIndex) {
-    const newState = contractFunctions.openPack(this._user, this._state, packIndex);
+    const newState = this.peekPack(packIndex);
     const newStateRoot = SomeGame.getStateRoot(newState);
+    const { beacons } = this._exposedPacks[packIndex];
 
     const { root: packsRoot, element: pack, compactProof: packProof } = this._state.packsTree.generateSingleProof(
       packIndex,
@@ -107,12 +154,13 @@ class SomeGame {
 
     const { root: cardsRoot, compactProof: cardsAppendProof } = this._state.cardsTree.generateAppendProof(proofOptions);
 
-    const callArgs = [packIndex, pack, packsRoot, packProof, cardsRoot, cardsAppendProof];
+    const callArgs = [packIndex, beacons, packsRoot, packProof, cardsRoot, cardsAppendProof];
     const result = await this._ori.open_pack.optimistic(callArgs, newStateRoot);
 
     assert(newStateRoot.equals(result.newState), 'New state mismatch');
 
     this._state = newState;
+    this._exposedPacks[packIndex] = {};
 
     return { tx: result };
   }

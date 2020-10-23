@@ -71,7 +71,7 @@ contract('Some Game', (accounts) => {
       bobGame = new SomeGame(bob, gameContractInstance, tokenContractInstance, optimismContractInstance, options);
     });
 
-    it('[ 1] allows a user (Alice) to initialize and bond.', async () => {
+    it.only('[ 1] allows a user (Alice) to initialize and bond.', async () => {
       aliceBondAmount = '1000000000000000000';
       const { tx } = await aliceGame.initialize({ bond: aliceBondAmount });
       const { receipt, logs } = tx;
@@ -94,7 +94,7 @@ contract('Some Game', (accounts) => {
       }
     });
 
-    it('[ 2] allows a user (Alice) to buy 5 packs of cards (normal state transition and remain outside of optimism).', async () => {
+    it.only('[ 2] allows a user (Alice) to buy 5 packs of cards (normal state transition and remain outside of optimism).', async () => {
       const packCount = 5;
       const { tx } = await aliceGame.buyPacks(packCount);
       const { receipt, logs } = tx;
@@ -119,6 +119,18 @@ contract('Some Game', (accounts) => {
       if (receipt.gasUsed !== 48826) {
         console.log(`Not Critical, but we expected gas used for [ 2] to be 48826, but got ${receipt.gasUsed}`);
       }
+    });
+
+    it('[ 3] allows a user (Alice) to peek into a pack of cards (just locally).', async () => {
+      const packIndex = 0;
+      aliceGame.peekPack(packIndex);
+      const { beacons, cards } = aliceGame.peekedPacks[packIndex];
+      
+      console.log('beacons', beacons.length);
+      // console.log(toHex(beacons));
+      
+      console.log('cards', cards.length);
+      // console.log(toHex(cards));
     });
 
     it('[ 3] allows a user (Alice) to open a pack of cards (optimistic state transition entering optimism).', async () => {

@@ -16,24 +16,36 @@ const hash = (buffer) => new Keccak(256).update(buffer).digest();
 
 const hashPacked = (buffers) => hash(Buffer.concat(buffers));
 
-const toHex = (buffer) => {
-  if (!Buffer.isBuffer(buffer)) return buffer;
+const prefix = (value) => (value.startsWith('0x') ? value : '0x' + value);
 
-  if (Array.isArray(buffer)) {
-    return buffer.map((b) => toHex(b));
+const toHex = (value) => {
+  if (typeof value == 'string') return prefix(value);
+
+  if (Array.isArray(value)) {
+    return value.map((v) => toHex(v));
   }
 
-  return '0x' + buffer.toString('hex');
+  return prefix(Buffer.isBuffer(value) ? value.toString('hex') : value.toString(16));
 };
 
-const toBuffer = (hex) => {
-  if (Buffer.isBuffer(hex)) return hex;
+const toBuffer = (value) => {
+  if (Buffer.isBuffer(value)) return value;
 
-  if (Array.isArray(hex)) {
-    return hex.map((h) => toBuffer(h));
+  if (Array.isArray(value)) {
+    return value.map((v) => toBuffer(v));
   }
 
-  return Buffer.from(hex.slice(2), 'hex');
+  return Buffer.from(toHex(value).slice(2), 'hex');
+};
+
+const toBigInt = (value) => {
+  if (typeof value == 'bigint') return value;
+
+  if (Array.isArray(value)) {
+    return value.map((v) => toBigInt(v));
+  }
+
+  return BigInt(toHex(v));
 };
 
 module.exports = {
@@ -44,4 +56,5 @@ module.exports = {
   hashPacked,
   toHex,
   toBuffer,
+  toBigInt,
 };
